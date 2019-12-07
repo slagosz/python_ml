@@ -73,17 +73,24 @@ class VolterraModel:
 
 
 class OnlineGradientDescent:
-    def __init__(self, volterra_model, boundary_radius=1, boundary_norm_order=2):
+    def __init__(self, volterra_model, stepsize_function, boundary_radius=1, boundary_norm_order=2):
         self.volterra_model = volterra_model
         self.volterra_model.parameters = np.zeros(self.volterra_model.D)
         self.iteration = 0
         self.boundary_radius = boundary_radius
         self.boundary_norm_order = boundary_norm_order
+        self.stepsize_function = stepsize_function
 
     def update(self, x, y):
+        assert len(x) >= self.volterra_model.memory_length
+
         self.iteration += 1
-        if self.iteration > self.volterra_model.memory_length:
-            gradient = self.compute_gradient(x, y)
+        gradient = np.array(self.compute_gradient(x, y))
+
+        parameters = np.array(self.volterra_model.parameters)
+        parameters = parameters - self.stepsize_function(self.iteration) * gradient
+        self.project(parameters)
+        self.volterra_model.set_parameters(parameters)
 
     def compute_gradient(self, x, y):
         gradient = []
@@ -93,51 +100,11 @@ class OnlineGradientDescent:
             )
         return gradient
 
-    def compute_stepsize(self):
-        D = self.boundary_radius
-        if self.boundary_norm_order == 2:
-            G = 0  # todo
-
-        return 0
-
-
-import matplotlib.pyplot as plt
-
-if __name__ == "__main__":
-    # m = VolterraModel(3, 2, 'legendre')
-    # xx = [1, 2, 3]
-    # for ff in m.dictionary:
-    #     y = ff(xx, 2)
-    #     print(y)
-
-    # Experiment: calculate the maximum of expected sqrt( ||g||^2_2 )
-    num_of_experiments = 1
-
-    N = 100
-    x = np.random.uniform(-1, 1, N)
-
-    Order = 2
-    Memory = 10
-    y_sys = 1  # assume constant - this become M const. in notes
-    boundary_norm_ord = 1
-    boundary_radius = 1
-    m = VolterraModel(Order, Memory)
-    alg = OnlineGradientDescent(m, boundary_radius, boundary_norm_ord)
-
-    avg_g = []
-    for exp in range(num_of_experiments):
-        m.parameters = np.random.uniform(-1, 1, m.D)
-        m.parameters *= boundary_radius / np.linalg.norm(m.parameters, boundary_norm_ord)
-
-        g = []
-        for i in range(Memory-1, N):
-            x_vec = x[0:i+1]
-            g.append(np.linalg.norm(alg.compute_gradient(x_vec, y_sys), 2) ** (1/2))
-
-        avg_g.append(np.average(g))
-
-    max_avg_g = np.max(avg_g)
-
-
-    sup_g = m.D ** (1/2) * (boundary_radius + y_sys)
-    print("sup_g={0}, max_avg_g={1}".format(sup_g, max_avg_g))
+    def project(self, parameters):
+        norm = np.linalg.norm(parameters, self.boundary_norm_order)
+        if norm > self.boundary_radius:
+            if self.boundary_norm_order == 2:
+                # TODO make sure it's valid
+                parameters = parameters * self.boundary_radius / norm
+            else:
+                raise Exception('Projection onto l_{0} ball not implemented'.format(self.boundary_norm_order))
