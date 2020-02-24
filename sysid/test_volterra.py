@@ -7,11 +7,20 @@ class TestVolterraFunction(unittest.TestCase):
         x = [2, 3]
         self.assertEqual(volterra_function([0], x), 3)
         self.assertEqual(volterra_function([1], x), 2)
-        self.assertEqual(volterra_function([0], x, 0), 2)
         self.assertEqual(volterra_function([0, 0], x), 3 * 3)
         self.assertEqual(volterra_function([1, 1], x), 2 * 2)
         self.assertEqual(volterra_function([0, 1], x), 3 * 2)
         self.assertEqual(volterra_function([1, 0], x), 3 * 2)
+
+    def test_volterra_function_time_shift(self):
+        x = [1, 2, 3, 4]
+        self.assertEqual(volterra_function([0], x, 0), 1)
+        self.assertEqual(volterra_function([0], x, 1), 2)
+        self.assertEqual(volterra_function([0], x, 2), 3)
+        self.assertEqual(volterra_function([0], x, 3), 4)
+        self.assertEqual(volterra_function([1], x, 1), 1)
+        self.assertEqual(volterra_function([2], x, 2), 1)
+        self.assertEqual(volterra_function([2], x, 3), 2)
 
     def test_volterra_function_too_short_input(self):
         x = [1]
@@ -23,7 +32,7 @@ class TestVolterraModel(unittest.TestCase):
         m = VolterraModel(0, 0)
         self.assertEqual(m.D, 1)
         m.set_parameters([3])
-        x = []
+        x = [0, 1, 2]
         self.assertEqual(m.evaluate_output(x), 3)
 
     def test_volterra_model_basic(self):
@@ -37,6 +46,7 @@ class TestVolterraModel(unittest.TestCase):
         x = [1, 2, 3]
         self.assertEqual(m.evaluate_output(x), 1 * 3 + 2 * 2)
         self.assertEqual(m.evaluate_output(x, 1), 1 * 2 + 2 * 1)
+        self.assertEqual(m.evaluate_output(x, 2), 1 * 3 + 2 * 2)
 
     def test_volterra_model_higher_order(self):
         order = 2
@@ -44,8 +54,6 @@ class TestVolterraModel(unittest.TestCase):
         m = VolterraModel(order, memory_len)
 
         self.assertEqual(m.D, 6)
-
-        print(m.dictionary_indices)
 
         m.set_parameters([0.5, 1, 2, 3, 4, -5])
         x = [1, 2, 3]
@@ -57,7 +65,7 @@ class TestOnlineGradientDescent(unittest.TestCase):
         order = 2
         memory_len = 2
         m = VolterraModel(order, memory_len)
-        alg = OnlineGradientDescent(m)
+        alg = GradientDescent(m)
 
         m.set_parameters([0.5, 1, 2, 3, 4, -5])
         x = [1, 2, 3]
@@ -68,9 +76,37 @@ class TestOnlineGradientDescent(unittest.TestCase):
         self.assertEqual(len(grad), m.D)
         # grad[i] = (y_mod - y_observed) * f_i(x)
         i = 0
-        for ind in m.dictionary_indices:
+        for ind in m.dictionary.dictionary_indices:
             self.assertEqual(grad[i], (y_mod - y_observed) * volterra_function(ind, x))
             i += 1
+
+
+class OtherModels(unittest.TestCase):
+    def test_lti_model(self):
+        imp_resp = [3, 2, 1]
+        x = [10, 5, -1]
+        lti = LTISystem(imp_resp)
+
+        y = lti.evaluate_output(x)
+
+        self.assertEqual(len(y), 3)
+        self.assertEqual(y[0], 30)
+        self.assertEqual(y[1], 35)
+        self.assertEqual(y[2], 17)
+
+    def Wiener_Hammerstein_model(self):
+        imp_resp_in = [2, 1]
+        imp_resp_out = [1, 1]
+        f = lambda x: x * 2
+
+        wh = WienerHammerstein(imp_resp_in, f, imp_resp_out)
+
+        x = [10, 1]
+        y = wh.evaluate_output(x)
+
+        self.assertEqual(len(y), 2)
+        self.assertEqual(y[0], 40)
+        self.assertEqual(y[1], 64)
 
 
 if __name__ == '__main__':
