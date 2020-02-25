@@ -85,6 +85,8 @@ class LinearModel:
 
 class VolterraModel(LinearModel):
     def __init__(self, order, memory_length, dict_type='standard', scaling_factor=1, include_constant_function=True):
+        assert memory_length > 0
+
         dictionary = VolterraDictionary(order, memory_length, dict_type, scaling_factor=scaling_factor,
                                         include_constant_function=include_constant_function)
         LinearModel.__init__(self, dictionary)
@@ -94,17 +96,35 @@ class VolterraModel(LinearModel):
         self.dict_type = dict_type
         self.D = self.dictionary.size
 
-    def evaluate_output(self, x, t=-1):
-        if len(x) < self.memory_length:
-            print('WARNING: the memory length is greater than the length of the input vector ({0} > {1})'.format(
-                self.memory_length, len(x)
-            ))
+    def evaluate_output(self, x, x0=0, t=None):
+        # if len(x) < self.memory_length:
+        #     print('WARNING: the memory length is greater than the length of the input vector ({0} > {1})'.format(
+        #         self.memory_length, len(x)
+        #     ))
 
-        return super().evaluate_output(x, t)
+        if x0 == 0:
+            x0 = np.zeros(self.memory_length - 1)
+        else:
+            x0 = np.array(x0)
+            assert len(x0) == (self.memory_length - 1)
 
-    def set_parameters(self, parameters):
-        assert len(parameters) == self.D
-        self.parameters = parameters
+        x = np.concatenate([x0, x])
+
+        if np.isscalar(t):
+            t_list = [t]
+        elif t is None:
+            t_list = list(range(0, len(x)))
+        else:
+            t_list = t
+
+        y = np.zeros(len(t_list))
+
+        i = 0
+        for t in t_list:
+            y[i] = super().evaluate_output(x, t + self.memory_length - 1)
+            i += 1
+
+        return y
 
 
 # this model contains redundant dictionary elements,
@@ -126,16 +146,22 @@ class VolterraModelForExpWeights(VolterraModel):
 class LTISystem:
     def __init__(self, impulse_response):
         self.impulse_response = impulse_response
+        self.memory_length = len(impulse_response)
 
     # assuming initial condition = 0
-    def evaluate_output(self, x):
+    def evaluate_output(self, x, x0=0):
         y = np.zeros(len(x))
+
+        if x0 == 0:
+            x0 = np.zeros(self.memory_length - 1)
+        else:
+            x0 = np.array(x0)
+            assert len(x0) == (self.memory_length - 1)
+
+        x = np.concatenate([x, x0])
 
         for t in range(len(y)):
             for i in range(len(self.impulse_response)):
-                if t - i < 0:
-                    break
-
                 y[t] += self.impulse_response[i] * x[t - i]
 
         return y

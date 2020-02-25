@@ -29,11 +29,12 @@ class TestVolterraFunction(unittest.TestCase):
 
 class TestVolterraModel(unittest.TestCase):
     def test_volterra_model_const(self):
-        m = VolterraModel(0, 0)
+        m = VolterraModel(0, 1)
         self.assertEqual(m.D, 1)
         m.set_parameters([3])
         x = [0, 1, 2]
-        self.assertEqual(m.evaluate_output(x), 3)
+        y = m.evaluate_output(x, t=2)
+        self.assertEqual(m.evaluate_output(x, t=2), 3)
 
     def test_volterra_model_basic(self):
         order = 1
@@ -44,9 +45,8 @@ class TestVolterraModel(unittest.TestCase):
 
         m.set_parameters([0, 1, 2])
         x = [1, 2, 3]
-        self.assertEqual(m.evaluate_output(x), 1 * 3 + 2 * 2)
-        self.assertEqual(m.evaluate_output(x, 1), 1 * 2 + 2 * 1)
-        self.assertEqual(m.evaluate_output(x, 2), 1 * 3 + 2 * 2)
+        self.assertEqual(m.evaluate_output(x, t=1), 1 * 2 + 2 * 1)
+        self.assertEqual(m.evaluate_output(x, t=2), 1 * 3 + 2 * 2)
 
     def test_volterra_model_higher_order(self):
         order = 2
@@ -57,7 +57,7 @@ class TestVolterraModel(unittest.TestCase):
 
         m.set_parameters([0.5, 1, 2, 3, 4, -5])
         x = [1, 2, 3]
-        self.assertEqual(m.evaluate_output(x), 0.5 + 1 * 3 + 2 * 2 + 3 * 3 * 3 + 4 * 3 * 2 - 5 * 2 * 2)
+        self.assertEqual(m.evaluate_output(x, t=2), 0.5 + 1 * 3 + 2 * 2 + 3 * 3 * 3 + 4 * 3 * 2 - 5 * 2 * 2)
 
 
 class TestOnlineGradientDescent(unittest.TestCase):
