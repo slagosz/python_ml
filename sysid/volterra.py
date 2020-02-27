@@ -96,19 +96,17 @@ class VolterraModel(LinearModel):
         self.dict_type = dict_type
         self.D = self.dictionary.size
 
-    def evaluate_output(self, x, x0=0, t=None):
+    def evaluate_output(self, x, x0=None, t=None):
         # if len(x) < self.memory_length:
         #     print('WARNING: the memory length is greater than the length of the input vector ({0} > {1})'.format(
         #         self.memory_length, len(x)
         #     ))
 
-        if x0 == 0:
+        if x0 is None:
             x0 = np.zeros(self.memory_length - 1)
         else:
             x0 = np.array(x0)
             assert len(x0) == (self.memory_length - 1)
-
-        x = np.concatenate([x0, x])
 
         if np.isscalar(t):
             t_list = [t]
@@ -117,6 +115,7 @@ class VolterraModel(LinearModel):
         else:
             t_list = t
 
+        x = np.concatenate([x0, x])
         y = np.zeros(len(t_list))
 
         i = 0
@@ -140,7 +139,7 @@ class VolterraModelForExpWeights(VolterraModel):
             redundant_fun = (lambda i: lambda x, t: -self.dictionary.dictionary[i](x, t))(f_idx)
             self.dictionary.dictionary.append(redundant_fun)
 
-        self.D *= 2
+        self.dictionary.size *= 2
 
 
 class LTISystem:

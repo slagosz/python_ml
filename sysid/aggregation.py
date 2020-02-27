@@ -1,6 +1,7 @@
 from numpy.random import randn, randint
 from numpy.linalg import norm
 from numpy import arange, cos, kron, mat, r_ as rng, round, stack
+import numpy as np
 
 from cvxpy import Problem, Minimize, Variable
 from cvxpy import norm as cvx_norm
@@ -30,7 +31,7 @@ p = Problem(o, c); p.solve()          # cvx_end
 '''
 
 
-def aggregation(X, Y, R):
+def aggregation(X, Y, R=1):
     """
     :param X: design matrix
     :param Y: system's output
@@ -38,8 +39,8 @@ def aggregation(X, Y, R):
     :return: vector of parameters
     """
 
-    num_of_params = X.shape[2]
-    A = Variable((num_of_params, 1))
+    num_of_params = X.shape[1]
+    A = Variable(num_of_params)
     o = Minimize(cvx_norm(X @ A - Y, 2))
     c = [cvx_norm(A, 1) <= R]
     p = Problem(o, c)
@@ -48,12 +49,27 @@ def aggregation(X, Y, R):
     return A.value
 
 
-def aggregation_for_volterra(m, x, y, x0=0):
-    """
+def create_design_matrix(dictionary, x, x0=None):
+    t_list = list(range(0, len(x)))
+    X = np.zeros([len(x), dictionary.size])
 
-    :param m:
-    :param x:
-    :param y:
-    :param x0:
-    :return:
-    """
+    if x0 is None:
+        x0 = np.zeros(dictionary.memory_length - 1)
+    else:
+        x0 = np.array(x0)
+        assert len(x0) == (dictionary.memory_length - 1)
+
+    x = np.concatenate([x0, x])
+
+    row_idx = 0
+    for t in t_list:
+        X[row_idx, :] = [f(x, t + dictionary.memory_length - 1) for f in dictionary.dictionary]
+        row_idx += 1
+
+    return X
+
+
+def aggregation_for_volterra(dictionary, x, y, x0=None, R=1):
+    X = create_design_matrix(dictionary, x, x0)
+
+    return aggregation(X, y, R)

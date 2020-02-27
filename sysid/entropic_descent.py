@@ -1,39 +1,32 @@
 from volterra import *
-import numba.cuda as cuda
 
 
 class EntropicDescentAlgorithm:
     def __init__(self, model, stepsize_function):
         self.model = model
         self.stepsize_function = stepsize_function
+        self.D = model.dictionary.size
 
-    def compute_gradient(self, x, y):
-        gradient = []
-        y_mod = self.model.evaluate_output(x)
+    def compute_gradient(self, x, y, t):
+        y_mod = self.model.evaluate_output(x, t=t)  # TODO check is it ok?
+        gradient = np.zeros(self.D)
+        i = 0
         for f in self.model.dictionary.dictionary:
-            gradient.append(
-                (y_mod - y) * f(x, -1)
-            )
-        return gradient
+            gradient[i] = (y_mod - y[t]) * f(x, t)
+            i += 1
 
-    def parallel(self):
-        assert cuda.is_available()
+        return gradient
 
     def run(self, x, y):
         assert len(x) == len(y)
-        assert len(x) >= self.model.memory_length
 
-        memory_offset = self.model.memory_length - 1
-
-        T = len(x) - memory_offset
-
-        theta_0 = np.ones(self.model.D) / self.model.D
+        theta_0 = np.ones(self.D) / self.D
         self.model.set_parameters(theta_0)
 
+        T = len(x)
+
         for i in range(T):
-            data_index = memory_offset + i
-            x_sliced = x[:data_index + 1]
-            gradient = np.array(self.compute_gradient(x_sliced, y[data_index]))
+            gradient = self.compute_gradient(x, y, i)
             stepsize = self.stepsize_function(i)
 
             theta_i = np.array(self.model.parameters) * np.exp(-stepsize * gradient)
