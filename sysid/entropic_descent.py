@@ -7,6 +7,9 @@ class EntropicDescentAlgorithm:
         self.stepsize_function = stepsize_function
         self.D = model.dictionary.size
 
+        # debug
+        self.max_g_sq = np.zeros(self.D)
+
     def compute_gradient(self, x, y, t):
         y_mod = self.model.evaluate_output(x, t=t)  # TODO check is it ok?
         gradient = np.zeros(self.D)
@@ -32,9 +35,17 @@ class EntropicDescentAlgorithm:
             theta_i = np.array(self.model.parameters) * np.exp(-stepsize * gradient)
             theta_i /= np.linalg.norm(theta_i, 1)
 
-            theta_avg = (theta_i + self.model.parameters * i) / (i + 1)
+            theta_avg = (theta_i + self.model.parameters * (i + 1)) / (i + 2)
+
+            assert bool(np.any(np.isnan(theta_avg))) is False  # check if none of numbers is NaN
 
             self.model.set_parameters(theta_avg)
+
+            # debug
+            self.max_g_sq = np.maximum(self.max_g_sq, gradient)
+
+        #print("max gradient for each coordinate: {0}".format(self.max_g_sq))
+        #print("max gradient: {0}".format(np.max(self.max_g_sq)))
 
         return self.model.parameters
 

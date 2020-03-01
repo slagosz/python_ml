@@ -39,15 +39,36 @@ class WienerHammerstein:
         return y
 
 
+class Dictionary:
+    def __init__(self):
+        self.size = 0
+        self.dictionary = []
+
+    def append(self, f):
+        self.dictionary.append(f)
+        self.size += 1
+
+
 class DictionaryBasedModel:
     def __init__(self, dictionary):
         self.dictionary = dictionary
         self.parameters = np.zeros(self.dictionary.size)
 
-    def evaluate_output(self, x, t=-1):
-        dict_output = [f(x, t) for f in self.dictionary.dictionary]
+    def evaluate_output(self, x, t=None):
+        if t is None:
+            t_list = range(0, len(x))
+        else:
+            t_list = [t]
 
-        return np.dot(self.parameters, dict_output)
+        y = np.zeros(len(t_list))
+
+        i = 0
+        for t in t_list:
+            dict_output = [f(x, t) for f in self.dictionary.dictionary]
+            y[i] = np.dot(self.parameters, dict_output)
+            i += 1
+
+        return y
 
     def set_parameters(self, parameters):
         assert len(parameters) == self.dictionary.size
