@@ -28,6 +28,8 @@ class EntropicDescentAlgorithm:
 
         T = len(x)
 
+        theta_avg = theta_0
+
         for i in range(T):
             gradient = self.compute_gradient(x, y, i)
             stepsize = self.stepsize_function(i)
@@ -35,19 +37,16 @@ class EntropicDescentAlgorithm:
             theta_i = np.array(self.model.parameters) * np.exp(-stepsize * gradient)
             theta_i /= np.linalg.norm(theta_i, 1)
 
-            theta_avg = (theta_i + self.model.parameters * (i + 1)) / (i + 2)
+            theta_avg = (theta_i + theta_avg * (i + 1)) / (i + 2)
 
             assert bool(np.any(np.isnan(theta_avg))) is False  # check if none of numbers is NaN
 
-            self.model.set_parameters(theta_avg)
+            self.model.set_parameters(theta_i)
 
             # debug
             self.max_g_sq = np.maximum(self.max_g_sq, gradient)
 
-        #print("max gradient for each coordinate: {0}".format(self.max_g_sq))
-        #print("max gradient: {0}".format(np.max(self.max_g_sq)))
-
-        return self.model.parameters
+        return theta_avg
 
 
 def map_parameters(parameters, R):

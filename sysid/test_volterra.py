@@ -83,7 +83,7 @@ class TestOnlineGradientDescent(unittest.TestCase):
 '''
 
 
-class OtherModels(unittest.TestCase):
+class TestOtherModels(unittest.TestCase):
     def test_lti_model(self):
         imp_resp = [3, 2, 1]
         x = [10, 5, -1]
@@ -96,7 +96,7 @@ class OtherModels(unittest.TestCase):
         self.assertEqual(y[1], 35)
         self.assertEqual(y[2], 17)
 
-    def Wiener_Hammerstein_model(self):
+    def test_Wiener_Hammerstein_model(self):
         imp_resp_in = [2, 1]
         imp_resp_out = [1, 1]
         f = lambda x: x * 2
@@ -109,6 +109,17 @@ class OtherModels(unittest.TestCase):
         self.assertEqual(len(y), 2)
         self.assertEqual(y[0], 40)
         self.assertEqual(y[1], 64)
+
+
+class TestEntropicDescent(unittest.TestCase):
+    def test_ed(self):
+        sys_dict = Dictionary()
+        sys_dict.append(lambda x, t: eval_legendre(1, x[t]))
+        sys_dict.append(lambda x, t: eval_legendre(2, x[t]))
+
+        true_sys = DictionaryBasedModel(sys_dict)
+        x = np.array([1, 0, -1])
+
 
 
 if __name__ == '__main__':
