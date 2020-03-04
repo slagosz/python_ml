@@ -110,6 +110,19 @@ class TestOtherModels(unittest.TestCase):
         self.assertEqual(y[0], 40)
         self.assertEqual(y[1], 64)
 
+    def test_dictionary_model(self):
+        dictionary = Dictionary()
+        dictionary.append(lambda x, t: x[t])
+
+        m = DictionaryBasedModel(dictionary)
+
+        x = [1, 2, 3]
+        y = m.evaluate_output(x)
+
+        self.assertEqual(y[0], 1)
+        self.assertEqual(y[1], 2)
+        self.assertEqual(y[2], 3)
+
 
 class TestEntropicDescent(unittest.TestCase):
     def test_ed(self):

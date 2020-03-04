@@ -1,30 +1,38 @@
 from volterra import *
+import copy
 
 
 class EntropicDescentAlgorithm:
-    def __init__(self, model, stepsize_function):
-        self.model = model
-        self.stepsize_function = stepsize_function
-        self.D = model.dictionary.size
+    def __init__(self, dictionary, R=1, constraint='simplex'):
+        self.dictionary = copy.deepcopy(dictionary)
 
-        # debug
-        self.max_g_sq = np.zeros(self.D)
+        if R is not 1:
+            scale_dictionary(dictionary, R)
 
-    def compute_gradient(self, x, y, t):
-        y_mod = self.model.evaluate_output(x, t=t)  # TODO check is it ok?
-        gradient = np.zeros(self.D)
+        if constraint == 'ball':
+            extend_dictionary(self.dictionary)
+
+        self.R = R
+        self.D = dictionary.size
+        self.constraint = constraint
+
+    def compute_gradient(self, model, x, y, t):
+        y_mod = model.evaluate_output(x, t=t)  # TODO check is it ok?
+        gradient = np.zeros(model.dictionary.size)
         i = 0
-        for f in self.model.dictionary.dictionary:
+        for f in model.dictionary.dictionary:
             gradient[i] = (y_mod - y[t]) * f(x, t)
             i += 1
 
         return gradient
 
-    def run(self, x, y):
+    def run(self, x, y, stepsize_function):
         assert len(x) == len(y)
 
+        model = DictionaryBasedModel(self.dictionary)
+
         theta_0 = np.ones(self.D) / self.D
-        self.model.set_parameters(theta_0)
+        model.set_parameters(theta_0)
 
         T = len(x)
 
@@ -32,30 +40,40 @@ class EntropicDescentAlgorithm:
 
         for i in range(T):
             gradient = self.compute_gradient(x, y, i)
-            stepsize = self.stepsize_function(i)
+            stepsize = stepsize_function(i)
 
-            theta_i = np.array(self.model.parameters) * np.exp(-stepsize * gradient)
+            theta_i = np.array(model.parameters) * np.exp(-stepsize * gradient)
             theta_i /= np.linalg.norm(theta_i, 1)
 
             theta_avg = (theta_i + theta_avg * (i + 1)) / (i + 2)
 
             assert bool(np.any(np.isnan(theta_avg))) is False  # check if none of numbers is NaN
 
-            self.model.set_parameters(theta_i)
+            model.set_parameters(theta_i)
 
-            # debug
-            self.max_g_sq = np.maximum(self.max_g_sq, gradient)
+        if self.constraint == 'simplex':
+            return theta_avg
+        elif self.constraint == 'ball':
+            return map_parameters_to_simplex(theta_avg, self.R)
 
-        return theta_avg
 
+def scale_dictionary(self, dictionary, R):
+        for f_idx, f in enumerate(dictionary.dictionary):
+            scaled_f = (lambda func: lambda x, t: R * func(x, t))(f)
+            dictionary[f_idx] = scaled_f
 
-def map_parameters(parameters, R):
-    assert len(parameters) % 2 == 0
-    D = int(len(parameters) / 2)
+def extend_dictionary(self, dictionary):
+        for f in dictionary.dictionary:
+            negative_fun = (lambda func: lambda x, t: -func(x, t))(f)
+            dictionary.append(negative_fun)
 
-    transformed_parameters = np.zeros(D)
+def map_parameters_to_simplex(self, parameters, R):
+        assert len(parameters) % 2 == 0
+        D = int(len(parameters) / 2)
 
-    for i in range(D):
-        transformed_parameters[i] = ((parameters[i] - parameters[i + D]) * R)
+        transformed_parameters = np.zeros(D)
 
-    return transformed_parameters
+        for i in range(D):
+            transformed_parameters[i] = ((parameters[i] - parameters[i + D]) * R)
+
+        return transformed_parameters

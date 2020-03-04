@@ -29,13 +29,13 @@ def legendre_function(indices, x, t=-1):
     return output
 
 
-class VolterraDictionary:
+class VolterraDictionary(Dictionary):
     def __init__(self, order, memory_length, dict_type='standard', scaling_factor=1, include_constant_function=True):
+        super().__init__()
         self.order = order
         self.memory_length = memory_length
         self.dict_type = dict_type
         self.dictionary_indices = []
-        self.dictionary = []
         self.scaling_factor = scaling_factor
         self.include_constant_function = include_constant_function
 
@@ -82,11 +82,6 @@ class VolterraModel(DictionaryBasedModel):
         self.D = self.dictionary.size
 
     def evaluate_output(self, x, x0=None, t=None):
-        # if len(x) < self.memory_length:
-        #     print('WARNING: the memory length is greater than the length of the input vector ({0} > {1})'.format(
-        #         self.memory_length, len(x)
-        #     ))
-
         if x0 is None:
             x0 = np.zeros(self.memory_length - 1)
         else:
