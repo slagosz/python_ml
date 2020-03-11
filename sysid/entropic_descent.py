@@ -7,17 +7,18 @@ class EntropicDescentAlgorithm:
         self.dictionary = copy.deepcopy(dictionary)
 
         if R is not 1:
-            scale_dictionary(dictionary, R)
+            scale_dictionary(self.dictionary, R)
 
         if constraint == 'ball':
             extend_dictionary(self.dictionary)
 
         self.R = R
-        self.D = dictionary.size
+        self.D = self.dictionary.size
         self.constraint = constraint
 
-    def compute_gradient(self, model, x, y, t):
-        y_mod = model.evaluate_output(x, t=t)  # TODO check is it ok?
+    @staticmethod
+    def compute_gradient(model, x, y, t):
+        y_mod = model.evaluate_output(x, t=t)
         gradient = np.zeros(model.dictionary.size)
         i = 0
         for f in model.dictionary.dictionary:
@@ -39,7 +40,7 @@ class EntropicDescentAlgorithm:
         theta_avg = theta_0
 
         for i in range(T):
-            gradient = self.compute_gradient(x, y, i)
+            gradient = self.compute_gradient(model, x, y, i)
             stepsize = stepsize_function(i)
 
             theta_i = np.array(model.parameters) * np.exp(-stepsize * gradient)
@@ -52,28 +53,35 @@ class EntropicDescentAlgorithm:
             model.set_parameters(theta_i)
 
         if self.constraint == 'simplex':
-            return theta_avg
+            return self.R * theta_avg
         elif self.constraint == 'ball':
             return map_parameters_to_simplex(theta_avg, self.R)
 
 
-def scale_dictionary(self, dictionary, R):
-        for f_idx, f in enumerate(dictionary.dictionary):
-            scaled_f = (lambda func: lambda x, t: R * func(x, t))(f)
-            dictionary[f_idx] = scaled_f
+def scale_dictionary(dictionary, R):
+    for f_idx, f in enumerate(dictionary.dictionary):
+        scaled_f = (lambda func: lambda x, t: R * func(x, t))(f)
+        dictionary.dictionary[f_idx] = scaled_f
 
-def extend_dictionary(self, dictionary):
-        for f in dictionary.dictionary:
-            negative_fun = (lambda func: lambda x, t: -func(x, t))(f)
-            dictionary.append(negative_fun)
 
-def map_parameters_to_simplex(self, parameters, R):
-        assert len(parameters) % 2 == 0
-        D = int(len(parameters) / 2)
+def extend_dictionary(dictionary):
+    redundant_functions = []
 
-        transformed_parameters = np.zeros(D)
+    for f in dictionary.dictionary:
+        negative_fun = (lambda func: lambda x, t: -func(x, t))(f)
+        redundant_functions.append(negative_fun)
 
-        for i in range(D):
-            transformed_parameters[i] = ((parameters[i] - parameters[i + D]) * R)
+    for f in redundant_functions:
+        dictionary.append(f)
 
-        return transformed_parameters
+
+def map_parameters_to_simplex(parameters, R):
+    assert len(parameters) % 2 == 0
+    D = int(len(parameters) / 2)
+
+    transformed_parameters = np.zeros(D)
+
+    for i in range(D):
+        transformed_parameters[i] = R * (parameters[i] - parameters[i + D])
+
+    return transformed_parameters

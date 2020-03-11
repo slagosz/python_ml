@@ -1,6 +1,6 @@
 import unittest
 from volterra import *
-
+from entropic_descent import *
 
 class TestVolterraFunction(unittest.TestCase):
     def test_volterra_function_basic(self):
@@ -115,6 +115,7 @@ class TestOtherModels(unittest.TestCase):
         dictionary.append(lambda x, t: x[t])
 
         m = DictionaryBasedModel(dictionary)
+        m.set_parameters([1])
 
         x = [1, 2, 3]
         y = m.evaluate_output(x)
@@ -123,15 +124,66 @@ class TestOtherModels(unittest.TestCase):
         self.assertEqual(y[1], 2)
         self.assertEqual(y[2], 3)
 
+        y = m.evaluate_output(x, t=2)
+        self.assertEqual(y, 3)
+
+    def test_scaling_and_exteding_dictionary(self):
+        dictionary = Dictionary()
+        dictionary.append(lambda x, t: 1)
+        dictionary.append(lambda x, t: x[t])
+
+        R = 2
+        scale_dictionary(dictionary, R)
+        self.assertEqual(dictionary.size, 2)
+
+        m = DictionaryBasedModel(dictionary)
+        m.set_parameters([1, 1])
+
+        x = [2]
+        y = m.evaluate_output(x)
+
+        y = m.evaluate_output(x)
+        self.assertEqual(y, R * 3)
+
+        extend_dictionary(dictionary)
+        self.assertEqual(dictionary.size, 4)
+
+        m = DictionaryBasedModel(dictionary)
+        m.set_parameters([1, 1, 0, 0.5])
+
+        y = m.evaluate_output(x)
+        self.assertEqual(y, R + 2 * R - R)
+
 
 class TestEntropicDescent(unittest.TestCase):
-    def test_ed(self):
+    @staticmethod
+    def generate_system(sys_parameters):
         sys_dict = Dictionary()
-        sys_dict.append(lambda x, t: eval_legendre(1, x[t]))
-        sys_dict.append(lambda x, t: eval_legendre(2, x[t]))
+        sys_dict.append(lambda x, t: 1)
+        sys_dict.append(lambda x, t: x[t])
 
         true_sys = DictionaryBasedModel(sys_dict)
+        true_sys.set_parameters(sys_parameters)
+
+        return true_sys
+
+    def test_algorithm_not_affecting_dictionary(self):
+        sys_dict = Dictionary()
+        sys_dict.append(lambda x, t: 1)
+
+        alg = EntropicDescentAlgorithm(sys_dict, R=3, constraint='ball')
+
+        self.assertEqual(sys_dict.size, 1)
+        self.assertEqual(sys_dict.dictionary[0]([1], 0), 1)
+
+    def test_ed(self):
+        sys_dict = Dictionary()
+        sys_dict.append(lambda x, t: 1)
+        sys_dict.append(lambda x, t: x[t])
+
+        true_sys = self.generate_system([1, 1])
         x = np.array([1, 0, -1])
+        y = true_sys.evaluate_output(x)
 
 
 
