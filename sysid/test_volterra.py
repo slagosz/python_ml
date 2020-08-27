@@ -2,6 +2,7 @@ import unittest
 from volterra import *
 from entropic_descent import *
 
+
 class TestVolterraFunction(unittest.TestCase):
     def test_volterra_function_basic(self):
         x = [2, 3]
@@ -29,7 +30,7 @@ class TestVolterraFunction(unittest.TestCase):
 
 class TestVolterraModel(unittest.TestCase):
     def test_volterra_model_const(self):
-        m = VolterraModel(0, 1)
+        m = VolterraModel(order=0, memory_length=0)
         self.assertEqual(m.D, 1)
         m.set_parameters([3])
         x = [0, 1, 2]
@@ -39,7 +40,7 @@ class TestVolterraModel(unittest.TestCase):
     def test_volterra_model_basic(self):
         order = 1
         memory_len = 2
-        m = VolterraModel(order, memory_len)
+        m = VolterraModel(order=order, memory_length=memory_len)
 
         self.assertEqual(m.D, 3)
 
@@ -51,7 +52,7 @@ class TestVolterraModel(unittest.TestCase):
     def test_volterra_model_higher_order(self):
         order = 2
         memory_len = 2
-        m = VolterraModel(order, memory_len)
+        m = VolterraModel(order=order, memory_length=memory_len)
 
         self.assertEqual(m.D, 6)
 
@@ -59,6 +60,15 @@ class TestVolterraModel(unittest.TestCase):
         x = [1, 2, 3]
         self.assertEqual(m.evaluate_output(x, t=2), 0.5 + 1 * 3 + 2 * 2 + 3 * 3 * 3 + 4 * 3 * 2 - 5 * 2 * 2)
 
+    def test_volterra_model_different_kernels(self):
+        kernels = [2, 1]
+        m = VolterraModel(kernels=kernels, include_constant_function=False)
+
+        self.assertEqual(m.D, 3)
+
+        m.set_parameters([3, 2, 1])
+        x = [1, 2, 3]
+        self.assertEqual(m.evaluate_output(x, t=2), 3 * 3 + 2 * 2 + 1 * 3 * 3)
 
 '''
 class TestOnlineGradientDescent(unittest.TestCase):
@@ -127,7 +137,7 @@ class TestOtherModels(unittest.TestCase):
         y = m.evaluate_output(x, t=2)
         self.assertEqual(y, 3)
 
-    def test_scaling_and_exteding_dictionary(self):
+    def test_scaling_and_extending_dictionary(self):
         dictionary = Dictionary()
         dictionary.append(lambda x, t: 1)
         dictionary.append(lambda x, t: x[t])
@@ -181,10 +191,30 @@ class TestEntropicDescent(unittest.TestCase):
         sys_dict.append(lambda x, t: 1)
         sys_dict.append(lambda x, t: x[t])
 
-        true_sys = self.generate_system([1, 1])
-        x = np.array([1, 0, -1])
-        y = true_sys.evaluate_output(x)
+        D = sys_dict.size
 
+        alg = EntropicDescentAlgorithm(sys_dict, R=1, constraint='simplex')
+
+        stepsize_function = lambda i, gradient: 1
+
+        ###
+        params = alg.run([], [], stepsize_function)
+        self.assertEqual(params.size, D)
+        self.assertEqual(params[0], 1/D)
+        self.assertEqual(params[1], 1/D)
+
+        ###
+        x = np.array([1, 0, -1])
+        y = np.array([2, 0.5, 1])
+        params = alg.run(x, y, stepsize_function)
+
+        p0 = np.array([1/2, 1/2])
+        p1 = np.array([1/2, 1/2])
+        p2 = np.array([1/2, 1/2])
+        p3 = np.array([np.e, np.e ** (-1)]) / (np.e + np.e ** (-1))
+        params_expected = (p0 + p1 + p2 + p3) / 4
+        self.assertEqual(params.size, D)
+        self.assertSequenceEqual(params.tolist(), params_expected.tolist())
 
 
 if __name__ == '__main__':

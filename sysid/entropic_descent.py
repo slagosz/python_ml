@@ -1,9 +1,28 @@
 from volterra import *
 import copy
+from tqdm import tqdm
 
 
-class EntropicDescentAlgorithm:
-    def __init__(self, dictionary, R=1, constraint='simplex'):
+def compute_gradient(model, x, y, t, x0=None):
+    y_sys = y[t]
+
+    if x0 is not None:
+        x = np.concatenate([x0, x])
+        t += model.dictionary.memory_length - 1
+
+    y_mod = model.evaluate_output(x, t=t)
+    gradient = np.zeros(model.dictionary.size)
+    i = 0
+
+    for f in model.dictionary.dictionary:
+        gradient[i] = (y_mod - y_sys) * f(x, t)
+        i += 1
+
+    return gradient
+
+
+class EntropicAlgorithm:
+    def __init__(self, dictionary, R, constraint):
         self.dictionary = copy.deepcopy(dictionary)
 
         if R is not 1:
@@ -15,47 +34,6 @@ class EntropicDescentAlgorithm:
         self.R = R
         self.D = self.dictionary.size
         self.constraint = constraint
-
-    @staticmethod
-    def compute_gradient(model, x, y, t):
-        y_mod = model.evaluate_output(x, t=t)
-        gradient = np.zeros(model.dictionary.size)
-        i = 0
-        for f in model.dictionary.dictionary:
-            gradient[i] = (y_mod - y[t]) * f(x, t)
-            i += 1
-
-        return gradient
-
-    def run(self, x, y, stepsize_function):
-        assert len(x) == len(y)
-
-        model = DictionaryBasedModel(self.dictionary)
-
-        theta_0 = np.ones(self.D) / self.D
-        model.set_parameters(theta_0)
-
-        T = len(x)
-
-        theta_avg = theta_0
-
-        for i in range(T):
-            gradient = self.compute_gradient(model, x, y, i)
-            stepsize = stepsize_function(i)
-
-            theta_i = np.array(model.parameters) * np.exp(-stepsize * gradient)
-            theta_i /= np.linalg.norm(theta_i, 1)
-
-            theta_avg = (theta_i + theta_avg * (i + 1)) / (i + 2)
-
-            assert bool(np.any(np.isnan(theta_avg))) is False  # check if none of numbers is NaN
-
-            model.set_parameters(theta_i)
-
-        if self.constraint == 'simplex':
-            return self.R * theta_avg
-        elif self.constraint == 'ball':
-            return map_parameters_to_simplex(theta_avg, self.R)
 
 
 def scale_dictionary(dictionary, R):
@@ -85,3 +63,158 @@ def map_parameters_to_simplex(parameters, R):
         transformed_parameters[i] = R * (parameters[i] - parameters[i + D])
 
     return transformed_parameters
+
+
+class EntropicDescentAlgorithm(EntropicAlgorithm):
+    def __init__(self, dictionary, R=1, constraint='simplex'):
+        super().__init__(dictionary, R, constraint)
+
+    def run(self, x, y, stepsize_function):
+        assert len(x) == len(y)
+
+        model = DictionaryBasedModel(self.dictionary)
+
+        theta_0 = np.ones(self.D) / self.D
+        model.set_parameters(theta_0)
+
+        T = len(x)
+
+        theta_avg = theta_0
+
+        for i in range(T):
+            gradient = compute_gradient(model, x, y, i)
+            stepsize = stepsize_function(i, gradient)
+
+            theta_i = np.array(model.parameters) * np.exp(-stepsize * gradient)
+            theta_i /= np.linalg.norm(theta_i, 1)
+
+            theta_avg = (theta_i + theta_avg * (i + 1)) / (i + 2)
+
+            assert bool(np.any(np.isnan(theta_avg))) is False  # check if none of numbers is NaN
+
+            model.set_parameters(theta_i)
+
+        if self.constraint == 'simplex':
+            return self.R * theta_avg
+        elif self.constraint == 'ball':
+            return map_parameters_to_simplex(theta_avg, self.R)
+
+
+class AdaptiveEntropicDescentAlgorithm(EntropicDescentAlgorithm):
+    def __init__(self, dictionary, R=1, constraint='simplex'):
+        super().__init__(dictionary, R, constraint)
+
+    def run(self, x, y, G_sq):
+        assert len(x) == len(y)
+
+        model = DictionaryBasedModel(self.dictionary)
+
+        theta_0 = np.ones(self.D) / self.D
+        model.set_parameters(theta_0)
+
+        T = len(x)
+
+        theta_avg = theta_0
+
+        gradient_max_sq_sum = 0
+
+        for i in range(T):
+            gradient = compute_gradient(model, x, y, i)
+
+            gradient_max_sq = np.max(gradient) ** 2
+            gradient_max_sq_sum += gradient_max_sq
+
+            stepsize = np.sqrt(np.log(self.D) / ((T - i - 1) * G_sq + gradient_max_sq_sum))
+
+            print("         stepsize: {0}".format(stepsize))
+
+            theta_i = np.array(model.parameters) * np.exp(-stepsize * gradient)
+            theta_i /= np.linalg.norm(theta_i, 1)
+
+            theta_avg = (theta_i + theta_avg * (i + 1)) / (i + 2)
+
+            assert bool(np.any(np.isnan(theta_avg))) is False  # check if none of numbers is NaN
+
+            model.set_parameters(theta_i)
+
+        if self.constraint == 'simplex':
+            return self.R * theta_avg
+        elif self.constraint == 'ball':
+            return map_parameters_to_simplex(theta_avg, self.R)
+
+
+class LazyEntropicDescentAlgorithm(EntropicAlgorithm):
+    def __init__(self, dictionary, R=1, constraint='simplex'):
+        super().__init__(dictionary, R, constraint)
+
+    def run(self, x, y, G_sq):
+        assert len(x) == len(y)
+
+        model = DictionaryBasedModel(self.dictionary)
+        theta_0 = np.ones(self.D) / self.D
+        model.set_parameters(theta_0)
+
+        gradient_avg = 0
+        T = len(x)
+
+        theta_avg = 0
+
+        for i in range(T):
+            gradient_i = compute_gradient(model, x, y, i)
+            gradient_avg = (gradient_i + gradient_avg * i) / (i + 1)
+
+            stepsize = np.sqrt(2 * np.log(self.D) / (G_sq * T))
+
+            theta_i = np.array(model.parameters) * np.exp(-stepsize * gradient_avg)
+            theta_i /= np.linalg.norm(theta_i, 1)
+
+            model.set_parameters(theta_i)
+
+            theta_avg = (theta_i + theta_avg * i) / (i + 1)
+
+        if self.constraint == 'simplex':
+            return self.R * theta_avg
+        elif self.constraint == 'ball':
+            return map_parameters_to_simplex(theta_avg, self.R)
+
+
+class AdaptiveLazyEntropicDescentAlgorithm(EntropicAlgorithm):
+    def __init__(self, dictionary, R=1, constraint='simplex'):
+        super().__init__(dictionary, R, constraint)
+        self.stepsize_seq = []
+
+    def run(self, x, y, G_sq, x0=None):
+        assert len(x) == len(y)
+
+        model = DictionaryBasedModel(self.dictionary)
+        theta_0 = np.ones(self.D) / self.D
+        model.set_parameters(theta_0)
+
+        gradient_avg = 0
+        gradient_sum = 0
+        gradient_max_sum = 0
+        T = len(x)
+
+        theta_avg = 0
+
+        for i in tqdm(range(T)):
+            gradient_i = compute_gradient(model, x, y, i, x0=x0)
+
+            stepsize = np.sqrt(np.log(self.D) / (G_sq + gradient_max_sum))
+            self.stepsize_seq.append(stepsize)  # for illustration
+
+            gradient_avg = (gradient_i + gradient_avg * i) / (i + 1)
+            gradient_sum += gradient_i
+            gradient_max_sum += max(gradient_i)
+
+            theta_i = np.exp(-stepsize * gradient_sum)
+            theta_i /= np.linalg.norm(theta_i, 1)
+
+            model.set_parameters(theta_i)
+
+            theta_avg = (theta_i + theta_avg * i) / (i + 1)
+
+        if self.constraint == 'simplex':
+            return self.R * theta_avg
+        elif self.constraint == 'ball':
+            return map_parameters_to_simplex(theta_avg, self.R)
