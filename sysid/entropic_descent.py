@@ -10,13 +10,19 @@ def compute_gradient(model, x, y, t, x0=None):
         x = np.concatenate([x0, x])
         t += model.dictionary.memory_length - 1
 
-    y_mod = model.evaluate_output(x, t=t)
-    gradient = np.zeros(model.dictionary.size)
-    i = 0
+    # y_mod = model.evaluate_output(x, t=t)
+    # gradient = np.zeros(model.dictionary.size)
+    # i = 0
 
-    for f in model.dictionary.dictionary:
-        gradient[i] = (y_mod - y_sys) * f(x, t)
-        i += 1
+    # y_diff = y_mod - y_sys
+    # for f in model.dictionary.dictionary:
+    #     gradient[i] = y_diff * f(x, t)
+    #     i += 1
+
+    dict_output = [f(x, t) for f in model.dictionary.dictionary]
+    y_mod = np.dot(model.parameters, dict_output)
+
+    gradient = (y_mod - y_sys) * dict_output
 
     return gradient
 
@@ -143,7 +149,7 @@ class AdaptiveEntropicDescentAlgorithm(EntropicDescentAlgorithm):
             return map_parameters_to_simplex(theta_avg, self.R)
 
 
-class LazyEntropicDescentAlgorithm(EntropicAlgorithm):
+class EntropicDualAveragingAlgorithm(EntropicAlgorithm):
     def __init__(self, dictionary, R=1, constraint='simplex'):
         super().__init__(dictionary, R, constraint)
 
@@ -159,7 +165,7 @@ class LazyEntropicDescentAlgorithm(EntropicAlgorithm):
 
         theta_avg = 0
 
-        for i in range(T):
+        for i in tqdm(range(T)):
             gradient_i = compute_gradient(model, x, y, i)
             gradient_avg = (gradient_i + gradient_avg * i) / (i + 1)
 
@@ -178,19 +184,18 @@ class LazyEntropicDescentAlgorithm(EntropicAlgorithm):
             return map_parameters_to_simplex(theta_avg, self.R)
 
 
-class AdaptiveLazyEntropicDescentAlgorithm(EntropicAlgorithm):
+class AdaptiveEntropicDualAveragingAlgorithm(EntropicAlgorithm):
     def __init__(self, dictionary, R=1, constraint='simplex'):
         super().__init__(dictionary, R, constraint)
         self.stepsize_seq = []
 
-    def run(self, x, y, G_sq, x0=None):
+    def run(self, x, y, G_sq, x0=None, adaptive_stepsize=True):
         assert len(x) == len(y)
 
         model = DictionaryBasedModel(self.dictionary)
         theta_0 = np.ones(self.D) / self.D
         model.set_parameters(theta_0)
 
-        gradient_avg = 0
         gradient_sum = 0
         gradient_max_sum = 0
         T = len(x)
@@ -200,10 +205,14 @@ class AdaptiveLazyEntropicDescentAlgorithm(EntropicAlgorithm):
         for i in tqdm(range(T)):
             gradient_i = compute_gradient(model, x, y, i, x0=x0)
 
-            stepsize = np.sqrt(np.log(self.D) / (G_sq + gradient_max_sum))
+            stepsize = 0
+            if adaptive_stepsize:
+                stepsize = np.sqrt(np.log(self.D) / (G_sq + gradient_max_sum))
+            else:
+                stepsize = np.sqrt(np.log(self.D) / (G_sq * (i+1)))
+
             self.stepsize_seq.append(stepsize)  # for illustration
 
-            gradient_avg = (gradient_i + gradient_avg * i) / (i + 1)
             gradient_sum += gradient_i
             gradient_max_sum += max(gradient_i)
 
